@@ -28,90 +28,103 @@ public class ClientHandler {
 
 
             try {
-
+                //цикл авторизации
                 while (true) {
                     String msg = is.readUTF();
                     System.out.println("Цикл авторизации: " + msg);
                     if (msg.startsWith("/")) {
-                        String command = msg.split(" ")[0];
-
-                        if (command.equals("/login")) {
-                            String username = msg.split(" ")[1];
-                            if (server.isUsernameBusy(username)) {
-                                sentControlMessage("/login_failed " + "Такой никнейм уже существует");
-                                continue;
-                            }
-                            sentControlMessage("/login_ok " + username);
-                            server.subscribe(this);
-                            this.username = username;
-                            break;
-                        }
+                        if (executeCommand(msg)) continue;
+                        else break;
                     }
                 }
-
+                //цикл получения сообщений
                 while (true) {
                     String msg = is.readUTF();
                     System.out.println("Цикл получения сообщений: " + msg);
                     if (msg.startsWith("/")) {
-                        System.out.println("Цикл получения служебных сообщений");
-                        String command = msg.split(" ")[0];
-
-                        if (command.equals("/exit")) {
-                            disconnect();
-                            break;
-                        }
-
-                        if (command.equals("/who_am_i")) {
-                            sentControlMessage("Ваш ник: "+ username);
-                            continue;
-                        }
-
-                        if (command.equals("/private")) {
-                            String username = msg.split(" ")[1];
-                            String privateMessage = msg.split(" ")[2];
-
-                            System.out.println(username);
-                            System.out.println(privateMessage);
-
-                            ClientHandler clientHandler = server.getClient(username);
-                            if (username != null) {
-                                clientHandler.sentMassage(privateMessage);
-                                continue;
-                            }
-                        }
+                        if (executeCommand(msg)) continue;
+                        else break;
                     }
-                    server.broadcast(username + ": "+ msg);
+                    server.broadcast(username, msg);
                 }
 
             } catch (IOException e) {
                 e.printStackTrace();
+            } finally {
+                disconnect();
             }
         });
         thread.start();
     }
 
-    private void disconnect(){
+    private void disconnect() {
+
         server.unsubscribe(this);
+            sentMassage("/exit");
         try {
-            sentControlMessage("/exit");
-        } catch (IOException e){
+            if (socket != null) {
+                socket.close();
+            }
+        } catch (IOException e) {
             e.printStackTrace();
         }
+        System.out.println("Сеанс подключения с клиентом: " + username + " завершён ");
+    }
+
+    public void sentMassage(String msg) {
         try {
-        if(socket!=null) {
-            socket.close();
-        }} catch (IOException e){
-            e.printStackTrace();
+            os.writeUTF(msg);
+        } catch (IOException e) {
+            disconnect();
         }
-        System.out.println("Сеанс подключения завершён");
     }
 
-    public void sentMassage(String msg) throws IOException {
-        os.writeUTF(msg);
+
+    //todo все команды вынести в енамки
+    private boolean executeCommand(String msg) {
+        System.out.println("Цикл получения служебных сообщений");
+        String command = msg.split(" ")[0];
+
+        if (command.equals("/exit")) {
+            return false;
+        }
+        if (command.equals("/ch")) {
+            this.username = msg.split(" ")[1];
+            server.updateUserList();
+            sentMassage("Ваш ник: " + username);
+            return true;
+        }
+
+        if (command.equals("/who_am_i")) {
+            sentMassage("Ваш ник: " + username);
+            return true;
+        }
+
+        if (command.equals("/private")) {
+            String[] tokens = msg.split(" ", 3);
+            server.sentPrivateMessage(this, tokens[1], tokens[2]);
+            return true;
+        }
+
+        if (command.equals("/login")) {
+            String username = msg.split(" ")[1];
+            String password = msg.split(" ")[2];
+
+            if (!server.isCorrectPassword(username,password)){
+                sentMassage("/login_failed " + "Некорректный логин или пароль");
+                return true;
+            }
+            if (server.isUsernameBusy(username)) {
+                sentMassage("/login_failed " + "Такой никнейм уже существует");
+                return true;
+            }
+            sentMassage("/login_ok " + username);
+            this.username = username;
+            server.subscribe(this);
+            return false;
+        }
+        return true;
     }
 
-    public void sentControlMessage(String msg) throws IOException {
-        os.writeUTF(msg);
-    }
 
 }

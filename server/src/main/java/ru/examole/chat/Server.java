@@ -4,15 +4,23 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 
 public class Server {
 
     private int port;
     private static List<ClientHandler> clients;
+    private static Map<String,String> authenticationMap;
 
     public Server(int port) {
+
+        authenticationMap = new HashMap<>();
+        authenticationMap.put("Bob","100");
+        authenticationMap.put("John","200");
+        authenticationMap.put("Mike","300");
 
         this.port = port;
         clients = new ArrayList<>();
@@ -30,21 +38,23 @@ public class Server {
         }
     }
 
-    public void subscribe(ClientHandler clientHandler){
+    public synchronized void  subscribe(ClientHandler clientHandler){
         clients.add(clientHandler);
+        updateUserList();
     }
 
-    public void unsubscribe(ClientHandler clientHandler){
+    public synchronized void unsubscribe(ClientHandler clientHandler){
         clients.remove(clientHandler);
+        updateUserList();
     }
 
-    public void broadcast(String msg) throws IOException {
+    public synchronized void broadcast(String username, String msg) {
         for (ClientHandler client : clients) {
-            client.sentMassage(msg);
+            client.sentMassage(username + ": " + msg);
         }
     }
 
-    public boolean isUsernameBusy(String username) {
+    public synchronized boolean isUsernameBusy(String username) {
         for (ClientHandler client : clients) {
             if (client.getUsername().equals(username))
                 return true;
@@ -52,14 +62,36 @@ public class Server {
         return false;
     }
 
-    public ClientHandler getClient(String username) {
-        ClientHandler clientHandler = null;
+    public synchronized void updateUserList(){
+        StringBuilder stringBuilder = new StringBuilder("/client_list ");
+        for (ClientHandler client: clients) {
+            stringBuilder.append(client.getUsername()).append(" ");
+        }
+        clients.forEach(c->c.sentMassage(stringBuilder.toString()));
+    }
+
+
+    public void sentPrivateMessage(ClientHandler senderClient, String recipientUsername, String message) {
         for (ClientHandler client : clients) {
-            if (client.getUsername().equals(username)) {
-                clientHandler = client;
+            if (client.getUsername().equals(recipientUsername)) {
+                client.sentMassage("---> Получено личное сообщение от: " + senderClient.getUsername() + " для Клиента: " + recipientUsername + " " + message);
+                senderClient.sentMassage("<--- Отправлено личное сообщение от: " + senderClient.getUsername() + " для Клиента: " + recipientUsername + " " + message);
+                return;
             }
         }
-        return clientHandler;
+        senderClient.sentMassage("Клиента с ником: " + recipientUsername + " нет в чате");
+    }
+
+    public boolean isCorrectPassword(String username, String password) {
+
+        if (!authenticationMap.containsKey(username)) {
+            return false;
+        }
+        if (authenticationMap.get(username).equals(password)) {
+            return true;
+        }
+        return false;
+
     }
 }
 
