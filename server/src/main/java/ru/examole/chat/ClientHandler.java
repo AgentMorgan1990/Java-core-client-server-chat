@@ -11,10 +11,10 @@ public class ClientHandler {
     private Server server;
     private DataInputStream is;
     private DataOutputStream os;
-    private String username;
+    private String nickname;
 
-    public String getUsername(){
-        return username;
+    public String getNickname() {
+        return nickname;
     }
 
     public ClientHandler(Server server, Socket socket) throws IOException {
@@ -28,90 +28,122 @@ public class ClientHandler {
 
 
             try {
-
+                //цикл авторизации
                 while (true) {
                     String msg = is.readUTF();
                     System.out.println("Цикл авторизации: " + msg);
                     if (msg.startsWith("/")) {
-                        String command = msg.split(" ")[0];
-
-                        if (command.equals("/login")) {
-                            String username = msg.split(" ")[1];
-                            if (server.isUsernameBusy(username)) {
-                                sentControlMessage("/login_failed " + "Такой никнейм уже существует");
-                                continue;
-                            }
-                            sentControlMessage("/login_ok " + username);
-                            server.subscribe(this);
-                            this.username = username;
-                            break;
-                        }
+                        if (executeCommand(msg)) continue;
+                        else break;
                     }
                 }
-
+                //цикл получения сообщений
                 while (true) {
                     String msg = is.readUTF();
                     System.out.println("Цикл получения сообщений: " + msg);
                     if (msg.startsWith("/")) {
-                        System.out.println("Цикл получения служебных сообщений");
-                        String command = msg.split(" ")[0];
-
-                        if (command.equals("/exit")) {
-                            disconnect();
-                            break;
-                        }
-
-                        if (command.equals("/who_am_i")) {
-                            sentControlMessage("Ваш ник: "+ username);
-                            continue;
-                        }
-
-                        if (command.equals("/private")) {
-                            String username = msg.split(" ")[1];
-                            String privateMessage = msg.split(" ")[2];
-
-                            System.out.println(username);
-                            System.out.println(privateMessage);
-
-                            ClientHandler clientHandler = server.getClient(username);
-                            if (username != null) {
-                                clientHandler.sentMassage(privateMessage);
-                                continue;
-                            }
-                        }
+                        if (executeCommand(msg)) continue;
+                        else break;
                     }
-                    server.broadcast(username + ": "+ msg);
+                    server.broadcast(nickname, msg);
                 }
 
             } catch (IOException e) {
                 e.printStackTrace();
+            } finally {
+                disconnect();
             }
         });
         thread.start();
     }
 
-    private void disconnect(){
+    private void disconnect() {
+
         server.unsubscribe(this);
+        sentMassage("/exit");
         try {
-            sentControlMessage("/exit");
-        } catch (IOException e){
+            if (socket != null) {
+                socket.close();
+            }
+        } catch (IOException e) {
             e.printStackTrace();
         }
+        System.out.println("Сеанс подключения с клиентом: " + nickname + " завершён ");
+    }
+
+    public void sentMassage(String msg) {
         try {
-        if(socket!=null) {
-            socket.close();
-        }} catch (IOException e){
-            e.printStackTrace();
+            os.writeUTF(msg);
+        } catch (IOException e) {
+            disconnect();
         }
-        System.out.println("Сеанс подключения завершён");
     }
 
-    public void sentMassage(String msg) throws IOException {
-        os.writeUTF(msg);
+
+    //todo все команды вынести в енамки, реализовать паттерн команда, что бы это не значило)
+    //todo порефачить в отношении массива строк чтобы уменьшить кол-во переменных
+    private boolean executeCommand(String msg) {
+        System.out.println("Цикл получения служебных сообщений");
+        String command = msg.split("\\s+")[0];
+
+        if (command.equals("/exit")) {
+            return false;
+        }
+        if (command.equals("/ch")) {
+            String[] tokens = msg.split("\\s+");
+            if (!checkCommandLength(tokens,2)){
+                return true;
+            }
+
+            String newNickname = tokens[1];
+            if (server.changeNickname(nickname, newNickname)) {
+                this.nickname = newNickname;
+                server.updateUserList();
+                sentMassage("Ваш ник: " + nickname);
+            } else {
+                sentMassage("Ник " + newNickname + "занят");
+            }
+            return true;
+        }
+
+        if (command.equals("/who_am_i")) {
+            sentMassage("Ваш ник: " + nickname);
+            return true;
+        }
+
+        if (command.equals("/private")) {
+            String[] tokens = msg.split("\\s+", 3);
+            server.sentPrivateMessage(this, tokens[1], tokens[2]);
+            return true;
+        }
+
+        if (command.equals("/login")) {
+
+            String[] tokens = msg.split("\\s+");
+
+            if (!checkCommandLength(tokens, 3)) {
+                return true;
+            }
+
+            String nickname = server.getNicknameByLoginAndPassword(tokens[1], tokens[2]);
+            if (nickname == null) {
+                sentMassage("/login_failed " + "Некорректный логин или пароль");
+                return true;
+            }
+
+            sentMassage("/login_ok " + nickname);
+            this.nickname = nickname;
+            server.subscribe(this);
+            return false;
+        }
+        return true;
     }
 
-    public void sentControlMessage(String msg) throws IOException {
-        os.writeUTF(msg);
+    private boolean checkCommandLength(String[] tokens, int normalLength) {
+        if (tokens.length > normalLength) {
+            sentMassage("Слишком много знаков в команде");
+            return false;
+        }
+        return true;
     }
-
 }
