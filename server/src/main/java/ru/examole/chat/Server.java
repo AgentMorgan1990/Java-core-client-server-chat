@@ -4,25 +4,18 @@ import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 
 public class Server {
 
     private int port;
     private static List<ClientHandler> clients;
-    private static Map<String,String> authenticationMap;
+    private AuthenticationProvider authenticationProvider;
 
     public Server(int port) {
-
-        authenticationMap = new HashMap<>();
-        authenticationMap.put("Bob","100");
-        authenticationMap.put("John","200");
-        authenticationMap.put("Mike","300");
-
         this.port = port;
+        this.authenticationProvider = new InMemoryAuthenticationProvider();
         clients = new ArrayList<>();
 
         try (ServerSocket serverSocket = new ServerSocket(port)) {
@@ -56,7 +49,7 @@ public class Server {
 
     public synchronized boolean isUsernameBusy(String username) {
         for (ClientHandler client : clients) {
-            if (client.getUsername().equals(username))
+            if (client.getNickname().equals(username))
                 return true;
         }
         return false;
@@ -65,7 +58,7 @@ public class Server {
     public synchronized void updateUserList(){
         StringBuilder stringBuilder = new StringBuilder("/client_list ");
         for (ClientHandler client: clients) {
-            stringBuilder.append(client.getUsername()).append(" ");
+            stringBuilder.append(client.getNickname()).append(" ");
         }
         clients.forEach(c->c.sentMassage(stringBuilder.toString()));
     }
@@ -73,25 +66,25 @@ public class Server {
 
     public void sentPrivateMessage(ClientHandler senderClient, String recipientUsername, String message) {
         for (ClientHandler client : clients) {
-            if (client.getUsername().equals(recipientUsername)) {
-                client.sentMassage("---> Получено личное сообщение от: " + senderClient.getUsername() + " для Клиента: " + recipientUsername + " " + message);
-                senderClient.sentMassage("<--- Отправлено личное сообщение от: " + senderClient.getUsername() + " для Клиента: " + recipientUsername + " " + message);
+            if (client.getNickname().equals(recipientUsername)) {
+                client.sentMassage("---> Получено личное сообщение от: " + senderClient.getNickname() + " для Клиента: " + recipientUsername + " " + message);
+                senderClient.sentMassage("<--- Отправлено личное сообщение от: " + senderClient.getNickname() + " для Клиента: " + recipientUsername + " " + message);
                 return;
             }
         }
         senderClient.sentMassage("Клиента с ником: " + recipientUsername + " нет в чате");
     }
 
-    public boolean isCorrectPassword(String username, String password) {
+    public String getNicknameByLoginAndPassword(String username, String password) {
+        return authenticationProvider.getNicknameByLoginAndPassword(username, password);
+    }
 
-        if (!authenticationMap.containsKey(username)) {
-            return false;
-        }
-        if (authenticationMap.get(username).equals(password)) {
+    public boolean changeNickname(String oldNickname, String newNickname) {
+        if (!isUsernameBusy(newNickname)) {
+            authenticationProvider.changeNickname(oldNickname, newNickname);
             return true;
         }
         return false;
-
     }
 }
 

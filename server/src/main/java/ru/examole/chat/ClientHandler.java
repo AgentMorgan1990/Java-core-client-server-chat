@@ -11,10 +11,10 @@ public class ClientHandler {
     private Server server;
     private DataInputStream is;
     private DataOutputStream os;
-    private String username;
+    private String nickname;
 
-    public String getUsername(){
-        return username;
+    public String getNickname() {
+        return nickname;
     }
 
     public ClientHandler(Server server, Socket socket) throws IOException {
@@ -45,7 +45,7 @@ public class ClientHandler {
                         if (executeCommand(msg)) continue;
                         else break;
                     }
-                    server.broadcast(username, msg);
+                    server.broadcast(nickname, msg);
                 }
 
             } catch (IOException e) {
@@ -60,7 +60,7 @@ public class ClientHandler {
     private void disconnect() {
 
         server.unsubscribe(this);
-            sentMassage("/exit");
+        sentMassage("/exit");
         try {
             if (socket != null) {
                 socket.close();
@@ -68,7 +68,7 @@ public class ClientHandler {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        System.out.println("Сеанс подключения с клиентом: " + username + " завершён ");
+        System.out.println("Сеанс подключения с клиентом: " + nickname + " завершён ");
     }
 
     public void sentMassage(String msg) {
@@ -80,51 +80,70 @@ public class ClientHandler {
     }
 
 
-    //todo все команды вынести в енамки
+    //todo все команды вынести в енамки, реализовать паттерн команда, что бы это не значило)
+    //todo порефачить в отношении массива строк чтобы уменьшить кол-во переменных
     private boolean executeCommand(String msg) {
         System.out.println("Цикл получения служебных сообщений");
-        String command = msg.split(" ")[0];
+        String command = msg.split("\\s+")[0];
 
         if (command.equals("/exit")) {
             return false;
         }
         if (command.equals("/ch")) {
-            this.username = msg.split(" ")[1];
-            server.updateUserList();
-            sentMassage("Ваш ник: " + username);
+            String[] tokens = msg.split("\\s+");
+            if (!checkCommandLength(tokens,2)){
+                return true;
+            }
+
+            String newNickname = tokens[1];
+            if (server.changeNickname(nickname, newNickname)) {
+                this.nickname = newNickname;
+                server.updateUserList();
+                sentMassage("Ваш ник: " + nickname);
+            } else {
+                sentMassage("Ник " + newNickname + "занят");
+            }
             return true;
         }
 
         if (command.equals("/who_am_i")) {
-            sentMassage("Ваш ник: " + username);
+            sentMassage("Ваш ник: " + nickname);
             return true;
         }
 
         if (command.equals("/private")) {
-            String[] tokens = msg.split(" ", 3);
+            String[] tokens = msg.split("\\s+", 3);
             server.sentPrivateMessage(this, tokens[1], tokens[2]);
             return true;
         }
 
         if (command.equals("/login")) {
-            String username = msg.split(" ")[1];
-            String password = msg.split(" ")[2];
 
-            if (!server.isCorrectPassword(username,password)){
+            String[] tokens = msg.split("\\s+");
+
+            if (!checkCommandLength(tokens, 3)) {
+                return true;
+            }
+
+            String nickname = server.getNicknameByLoginAndPassword(tokens[1], tokens[2]);
+            if (nickname == null) {
                 sentMassage("/login_failed " + "Некорректный логин или пароль");
                 return true;
             }
-            if (server.isUsernameBusy(username)) {
-                sentMassage("/login_failed " + "Такой никнейм уже существует");
-                return true;
-            }
-            sentMassage("/login_ok " + username);
-            this.username = username;
+
+            sentMassage("/login_ok " + nickname);
+            this.nickname = nickname;
             server.subscribe(this);
             return false;
         }
         return true;
     }
 
-
+    private boolean checkCommandLength(String[] tokens, int normalLength) {
+        if (tokens.length > normalLength) {
+            sentMassage("Слишком много знаков в команде");
+            return false;
+        }
+        return true;
+    }
 }
