@@ -15,11 +15,12 @@ public class Server {
 
     public Server(int port) {
         this.port = port;
-        this.authenticationProvider = new InMemoryAuthenticationProvider();
+        this.authenticationProvider = new SQLiteAuthenticationProvider();
         clients = new ArrayList<>();
 
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             System.out.println("Server started on port " + port);
+            authenticationProvider.init();
 
             while (true) {
                 Socket socket = serverSocket.accept();
@@ -28,6 +29,8 @@ public class Server {
             }
         } catch (IOException e) {
             e.printStackTrace();
+        } finally {
+            authenticationProvider.shutdown();
         }
     }
 

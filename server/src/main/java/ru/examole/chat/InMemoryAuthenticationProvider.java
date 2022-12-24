@@ -20,14 +20,6 @@ public class InMemoryAuthenticationProvider implements AuthenticationProvider {
 
     private List<User> users;
 
-    public InMemoryAuthenticationProvider() {
-        this.users = new ArrayList<>(Arrays.asList(
-                new User("SuperBob", "Bob", "100"),
-                new User("Teapot", "Jo", "100"),
-                new User("Quo-quo", "Alan", "100")
-        ));
-    }
-
     @Override
     public String getNicknameByLoginAndPassword(String login, String password) {
         for (User user : users) {
@@ -46,6 +38,19 @@ public class InMemoryAuthenticationProvider implements AuthenticationProvider {
             }
         }
         return newNickname;
+    }
+
+    @Override
+    public void init() {
+        this.users = new ArrayList<>(Arrays.asList(
+                new User("SuperBob", "Bob", "100"),
+                new User("Teapot", "Jo", "100"),
+                new User("Quo-quo", "Alan", "100")
+        ));
+    }
+
+    @Override
+    public void shutdown() {
     }
 }
 
