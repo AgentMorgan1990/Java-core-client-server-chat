@@ -2,25 +2,29 @@ package ru.examole.chat;
 
 import java.sql.*;
 
-public class SQLConnection {
+public class DBConnection {
 
-    static Connection connection;
-    static Statement stmt;
-    static PreparedStatement psInsert;
+    private Connection connection;
+    private Statement stmt;
+    private PreparedStatement psInsert;
 
 
-    public static void connect() {
+    public Statement getStmt() {
+        return stmt;
+    }
+
+    public DBConnection() {
         try {
             Class.forName("org.sqlite.JDBC");
-            connection = DriverManager.getConnection("jdbc:sqlite:chat.db");
-
+            this.connection = DriverManager.getConnection("jdbc:sqlite:chat.db");
+            this.stmt = connection.createStatement();
         } catch (ClassNotFoundException | SQLException e) {
             e.printStackTrace();
             throw new RuntimeException("Невозможно подключиться к БД");
         }
     }
 
-    public static void disconnect() {
+    public void disconnect() {
         try {
             if (stmt != null) {
                 stmt.close();
