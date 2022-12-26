@@ -1,6 +1,6 @@
 package ru.examole.chat;
 
-import java.io.IOException;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -12,15 +12,19 @@ public class Server {
     private int port;
     private static List<ClientHandler> clients;
     private AuthenticationProvider authenticationProvider;
+    private OutputStream outputStream;
+    private InputStream inputStream;
 
     public Server(int port) {
         this.port = port;
-        this.authenticationProvider = new SQLiteAuthenticationProvider();
+        this.authenticationProvider = new DBAuthenticationProvider();
+        authenticationProvider.init();
         clients = new ArrayList<>();
 
         try (ServerSocket serverSocket = new ServerSocket(port)) {
+            outputStream = new BufferedOutputStream(new FileOutputStream("Chat.txt"));
+//            inputStream = new BufferedInputStream(new FileInputStream("Chat.txt"));
             System.out.println("Server started on port " + port);
-            authenticationProvider.init();
 
             while (true) {
                 Socket socket = serverSocket.accept();
@@ -34,7 +38,7 @@ public class Server {
         }
     }
 
-    public synchronized void  subscribe(ClientHandler clientHandler){
+    public synchronized void subscribe(ClientHandler clientHandler) {
         clients.add(clientHandler);
         updateUserList();
     }
@@ -44,9 +48,11 @@ public class Server {
         updateUserList();
     }
 
-    public synchronized void broadcast(String username, String msg) {
+    public synchronized void broadcast(String username, String msg) throws IOException {
         for (ClientHandler client : clients) {
             client.sentMassage(username + ": " + msg);
+            outputStream.write((username + ": " + msg).getBytes());
+            outputStream.flush();
         }
     }
 
@@ -83,11 +89,22 @@ public class Server {
     }
 
     public boolean changeNickname(String oldNickname, String newNickname) {
-        if (!isUsernameBusy(newNickname)) {
+        if (!authenticationProvider.isNickBusy(newNickname)) {
             authenticationProvider.changeNickname(oldNickname, newNickname);
             return true;
         }
         return false;
+    }
+    public String getHistory() throws IOException {
+        inputStream = new BufferedInputStream(new FileInputStream("Chat.txt"));
+        String history;
+        StringBuilder sb = new StringBuilder();
+        int x;
+        while ((x = inputStream.read()) != -1) {
+            sb.append((char) x);
+        }
+        inputStream.close();
+        return history = sb.toString();
     }
 }
 

@@ -82,7 +82,7 @@ public class ClientHandler {
 
     //todo все команды вынести в енамки, реализовать паттерн команда, что бы это не значило)
     //todo порефачить в отношении массива строк чтобы уменьшить кол-во переменных
-    private boolean executeCommand(String msg) {
+    private boolean executeCommand(String msg) throws IOException {
         System.out.println("Цикл получения служебных сообщений");
         String command = msg.split("\\s+")[0];
 
@@ -134,6 +134,7 @@ public class ClientHandler {
             sentMassage("/login_ok " + nickname);
             this.nickname = nickname;
             server.subscribe(this);
+            sentMassage(server.getHistory());
             return false;
         }
         return true;
