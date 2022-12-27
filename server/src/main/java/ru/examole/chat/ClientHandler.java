@@ -1,5 +1,9 @@
 package ru.examole.chat;
 
+import lombok.Getter;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -11,11 +15,9 @@ public class ClientHandler {
     private Server server;
     private DataInputStream is;
     private DataOutputStream os;
+    @Getter
     private String nickname;
-
-    public String getNickname() {
-        return nickname;
-    }
+    private static final Logger log = LogManager.getLogger(ClientHandler.class);
 
     public ClientHandler(Server server, Socket socket) throws IOException {
 
@@ -25,31 +27,26 @@ public class ClientHandler {
         this.server = server;
 
         Thread thread = new Thread(() -> {
-
-
             try {
-                //цикл авторизации
                 while (true) {
                     String msg = is.readUTF();
-                    System.out.println("Цикл авторизации: " + msg);
-                    if (msg.startsWith("/")) {
-                        if (executeCommand(msg)) continue;
-                        else break;
-                    }
-                }
-                //цикл получения сообщений
-                while (true) {
-                    String msg = is.readUTF();
-                    System.out.println("Цикл получения сообщений: " + msg);
-                    if (msg.startsWith("/")) {
-                        if (executeCommand(msg)) continue;
-                        else break;
-                    }
-                    server.broadcast(nickname, msg);
-                }
 
+                    if (msg.equals(Command.COMMAND_EXIT.toString())) {
+                        log.debug("Вошли в выполнение команды выхода");
+                        break;
+                    }
+
+                    if (msg.startsWith("COMMAND")) {
+                        log.debug("Вошли в выполнение других команд");
+                        executeCommand(msg);
+                        continue;
+                    }
+
+                    server.broadcast(nickname, msg);
+                    log.debug("Рассылка сообщения");
+                }
             } catch (IOException e) {
-                e.printStackTrace();
+                log.error(e);
             } finally {
                 disconnect();
             }
@@ -58,9 +55,8 @@ public class ClientHandler {
     }
 
     private void disconnect() {
-
         server.unsubscribe(this);
-        sentMassage("/exit");
+        sentMassage(Command.COMMAND_EXIT.toString());
         try {
             if (socket != null) {
                 socket.close();
@@ -68,7 +64,7 @@ public class ClientHandler {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        System.out.println("Сеанс подключения с клиентом: " + nickname + " завершён ");
+        log.info("Сеанс подключения с клиентом: " + nickname + " завершён ");
     }
 
     public void sentMassage(String msg) {
@@ -79,65 +75,74 @@ public class ClientHandler {
         }
     }
 
+    private void executeCommand(String msg) throws IOException {
+        log.debug("Полученная команда " + msg);
+        Command command = Command.valueOf(msg.split("\\s+")[0]);
 
-    //todo все команды вынести в енамки, реализовать паттерн команда, что бы это не значило)
-    //todo порефачить в отношении массива строк чтобы уменьшить кол-во переменных
-    private boolean executeCommand(String msg) throws IOException {
-        System.out.println("Цикл получения служебных сообщений");
-        String command = msg.split("\\s+")[0];
-
-        if (command.equals("/exit")) {
-            return false;
+        switch (command) {
+            case COMMAND_CHANGE_NICKNAME:
+                changeNickname(msg);
+                break;
+            case COMMAND_SHOW_MY_NICKNAME:
+                showNickname();
+                break;
+            case COMMAND_SEND_PRIVATE_MESSAGE:
+                sendPrivateMessage(msg);
+                break;
+            case COMMAND_LOGIN:
+                tryToLogin(msg);
+                break;
         }
-        if (command.equals("/ch")) {
-            String[] tokens = msg.split("\\s+");
-            if (!checkCommandLength(tokens,2)){
-                return true;
-            }
+    }
 
-            String newNickname = tokens[1];
-            if (server.changeNickname(nickname, newNickname)) {
-                this.nickname = newNickname;
-                server.updateUserList();
-                sentMassage("Ваш ник: " + nickname);
-            } else {
-                sentMassage("Ник " + newNickname + "занят");
-            }
-            return true;
+    private void changeNickname(String msg) {
+
+        String[] tokens = msg.split("\\s+");
+        if (!checkCommandLength(tokens, 2)) {
+            sentMassage("Некорректная длина комманды при смене ника");
+            return;
         }
 
-        if (command.equals("/who_am_i")) {
+        String newNickname = tokens[1];
+        if (server.changeNickname(nickname, newNickname)) {
+            this.nickname = newNickname;
+            server.updateUserList();
             sentMassage("Ваш ник: " + nickname);
-            return true;
+        } else {
+            sentMassage("Ник " + newNickname + "занят");
+        }
+    }
+
+    private void showNickname() {
+        sentMassage("Ваш ник: " + nickname);
+    }
+
+    private void sendPrivateMessage(String msg) {
+        String[] tokens = msg.split("\\s+", 3);
+        server.sentPrivateMessage(this, tokens[1], tokens[2]);
+    }
+
+
+    private void tryToLogin(String msg) {
+        String[] tokens = msg.split("\\s+");
+
+        if (!checkCommandLength(tokens, 3)) {
+            sentMassage(Command.COMMAND_SEND_LOGIN_FAILED + " Некорректная длина логина или пароля");
+            return;
         }
 
-        if (command.equals("/private")) {
-            String[] tokens = msg.split("\\s+", 3);
-            server.sentPrivateMessage(this, tokens[1], tokens[2]);
-            return true;
+        String nickname = server.getNicknameByLoginAndPassword(tokens[1], tokens[2]);
+        if (nickname == null) {
+            sentMassage(Command.COMMAND_SEND_LOGIN_FAILED + " Некорректный логин или пароль");
+            return;
         }
 
-        if (command.equals("/login")) {
+        sentMassage(Command.COMMAND_SEND_LOGIN_OK + " " + nickname);
+        this.nickname = nickname;
+        server.subscribe(this);
 
-            String[] tokens = msg.split("\\s+");
-
-            if (!checkCommandLength(tokens, 3)) {
-                return true;
-            }
-
-            String nickname = server.getNicknameByLoginAndPassword(tokens[1], tokens[2]);
-            if (nickname == null) {
-                sentMassage("/login_failed " + "Некорректный логин или пароль");
-                return true;
-            }
-
-            sentMassage("/login_ok " + nickname);
-            this.nickname = nickname;
-            server.subscribe(this);
-            sentMassage(server.getHistory());
-            return false;
-        }
-        return true;
+        //todo поправить отправку истории
+        //sentMassage(server.getHistory());
     }
 
     private boolean checkCommandLength(String[] tokens, int normalLength) {

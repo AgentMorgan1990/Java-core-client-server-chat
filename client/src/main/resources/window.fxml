@@ -25,6 +25,8 @@
     </HBox>
 
     <ToolBar prefHeight="40.0" prefWidth="318.0" xmlns:fx="http://javafx.com/fxml/1" xmlns="http://javafx.com/javafx/8">
-    <Button text="Отключиться"   prefWidth="150"  onAction="#sendDisconnect"/>
+        <Button text="Отключиться" prefWidth="150" onAction="#sendDisconnect"/>
+        <Button text="Сменить никнейм" prefWidth="150" onAction="#sendNewNickname"/>
+        <TextField fx:id="newNicknameField" HBox.hgrow="ALWAYS" promptText="Введите новый никнэйм" onAction="#sendNewNickname"/>
     </ToolBar>
 </VBox>

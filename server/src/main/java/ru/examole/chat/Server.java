@@ -1,5 +1,8 @@
 package ru.examole.chat;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -14,6 +17,8 @@ public class Server {
     private AuthenticationProvider authenticationProvider;
     private OutputStream outputStream;
     private InputStream inputStream;
+
+    private static final Logger log = LogManager.getLogger(Server.class);
 
     public Server(int port) {
         this.port = port;
@@ -65,7 +70,7 @@ public class Server {
     }
 
     public synchronized void updateUserList(){
-        StringBuilder stringBuilder = new StringBuilder("/client_list ");
+        StringBuilder stringBuilder = new StringBuilder(Command.COMMAND_GET_CLIENT_LIST.toString()).append(" ");
         for (ClientHandler client: clients) {
             stringBuilder.append(client.getNickname()).append(" ");
         }

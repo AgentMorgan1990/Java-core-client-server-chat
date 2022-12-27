@@ -1,6 +1,8 @@
 package ru.example.chat;
 
 import lombok.Setter;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -23,9 +25,15 @@ public class Network {
     private Callback onConnectCallback;
     @Setter
     private Callback onDisconnectCallback;
+    @Setter
+    private Callback onHistoryReceivedCallback;
 
-    public void connect(int port) throws IOException {
-        socket = new Socket("localhost", port);
+    private static final Logger log = LogManager.getLogger(Network.class);
+
+
+    public void connect(String host, int port) throws IOException {
+        log.debug("Вызван метод connect в Network");
+        socket = new Socket(host, port);
         in = new DataInputStream(socket.getInputStream());
         out = new DataOutputStream(socket.getOutputStream());
 
@@ -37,14 +45,16 @@ public class Network {
             try {
                 while (true) {
                     String msg = in.readUTF();
-                    if (msg.startsWith(Command.SEND_LOGIN_OK.getDescription())) {
+                    if (msg.startsWith(Command.COMMAND_SEND_LOGIN_OK.toString())) {
+                        log.info("Получен успешный ответ от сервера об авториризации "+msg);
                         if (onAuthOkCallback != null) {
                             onAuthOkCallback.callback(msg);
                         }
                         break;
                     }
-                    if (msg.startsWith(Command.SEND_LOGIN_FAILED.getDescription())) {
+                    if (msg.startsWith(Command.COMMAND_SEND_LOGIN_FAILED.toString())) {
                         String cause = msg.split("\\s", 2)[1];
+                        log.info("Получен неуспешный ответ от сервера об авториризации " + cause);
                         if (onAuthFailedCallback != null) {
                             onAuthFailedCallback.callback(cause);
                         }
@@ -52,12 +62,18 @@ public class Network {
                 }
                 while (true) {
                     String msg = in.readUTF();
+                    if (msg.startsWith(Command.COMMAND_GET_CLIENT_LIST.toString()) && onHistoryReceivedCallback != null) {
+                        log.info("Получен список клиентов онлайн от сервера");
+                        onHistoryReceivedCallback.callback(msg);
+                        continue;
+                    }
                     if (onMessageReceivedCallback != null) {
+                        log.info("Получено сообщение от сервера");
                         onMessageReceivedCallback.callback(msg);
                     }
                 }
             } catch (IOException e) {
-                e.printStackTrace();
+                log.error(e);
             } finally {
                 disconnect();
             }
@@ -73,10 +89,6 @@ public class Network {
         out.writeUTF(message);
     }
 
-//    public void tryToLogin(String login, String password) throws IOException {
-//        sendMessage("/login " + login + " " + password);
-//    }
-
     public void disconnect() {
         if (onDisconnectCallback != null) {
             onDisconnectCallback.callback();
@@ -86,21 +98,21 @@ public class Network {
                 in.close();
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error(e);
         }
         try {
             if (out != null) {
                 out.close();
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error(e);
         }
         try {
             if (socket != null) {
                 socket.close();
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error(e);
         }
     }
 }

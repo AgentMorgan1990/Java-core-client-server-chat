@@ -1,4 +1,4 @@
-package ru.example.chat;
+package ru.examole.chat;
 
 import lombok.AllArgsConstructor;
 
